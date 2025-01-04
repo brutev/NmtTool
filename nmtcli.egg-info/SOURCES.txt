@@ -1,0 +1,14 @@
+LICENSE
+MANIFEST.in
+README.md
+nmt_cli.py
+setup.py
+app/__init__.py
+app/__main__.py
+app/application.py
+nmtcli.egg-info/PKG-INFO
+nmtcli.egg-info/SOURCES.txt
+nmtcli.egg-info/dependency_links.txt
+nmtcli.egg-info/entry_points.txt
+nmtcli.egg-info/requires.txt
+nmtcli.egg-info/top_level.txt

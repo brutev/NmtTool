@@ -1,0 +1,2 @@
+[console_scripts]
+cooltool = nmt_cli:cli
