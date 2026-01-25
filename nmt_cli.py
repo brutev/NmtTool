@@ -1,3 +1,9 @@
+
+"""
+NMT CLI tool for Flutter development.
+Provides commands for project creation, entity generation, layout templates, and package renaming.
+"""
+
 import click
 import os
 import json
@@ -6,13 +12,19 @@ from typing import Dict, List
 
 @click.group()
 def cli():
-    """NMT CLI tool for Flutter development"""
-    pass
+  """
+  Main entry point for the NMT CLI tool.
+  """
+  pass
 
 @cli.command()
 @click.argument('project_name')
 def create(project_name: str):
-    """Create new Flutter project with NMT structure"""
+  """
+  Create a new Flutter project with the NMT directory structure.
+  Args:
+    project_name (str): Name of the new Flutter project.
+  """
     os.system(f'flutter create {project_name}')
     directories = ['lib/core/entities', 'lib/features', 'lib/shared', 'lib/config']
     for dir_path in directories:
@@ -23,7 +35,12 @@ def create(project_name: str):
 @click.argument('csv_path')
 @click.argument('entity_name')
 def generate_entity(csv_path: str, entity_name: str):
-    """Generate Equatable entity from CSV"""
+  """
+  Generate a Dart Equatable entity class from a CSV file.
+  Args:
+    csv_path (str): Path to the CSV file.
+    entity_name (str): Name of the Dart entity to generate.
+  """
     if not os.path.exists(csv_path):
         click.echo(f'Error: CSV file not found: {csv_path}')
         return
@@ -70,46 +87,87 @@ class {entity_name} extends Equatable {{
     click.echo(f'Generated entity: {output_path}')
 
 def _generate_fields(sample_row: Dict) -> str:
-    return '\n  '.join([f'final {_infer_type(value)} {key};' for key, value in sample_row.items()])
+  """
+  Generate Dart class fields from a sample CSV row.
+  Args:
+    sample_row (Dict): Example row from CSV.
+  Returns:
+    str: Dart fields as a string.
+  """
+  return '\n  '.join([f'final {_infer_type(value)} {key};' for key, value in sample_row.items()])
 
 def _generate_constructor_params(sample_row: Dict) -> str:
-    return '\n    '.join([f'required this.{key},' for key in sample_row.keys()])
+  """
+  Generate Dart constructor parameters from a sample CSV row.
+  Args:
+    sample_row (Dict): Example row from CSV.
+  Returns:
+    str: Constructor parameters as a string.
+  """
+  return '\n    '.join([f'required this.{key},' for key in sample_row.keys()])
 
 def _generate_props(sample_row: Dict) -> str:
-    return ', '.join(sample_row.keys())
+  """
+  Generate the props list for Equatable from a sample CSV row.
+  Args:
+    sample_row (Dict): Example row from CSV.
+  Returns:
+    str: Comma-separated property names.
+  """
+  return ', '.join(sample_row.keys())
 
 def _generate_from_map(sample_row: Dict) -> str:
-    mappings = []
-    for key, value in sample_row.items():
-        if _infer_type(value) == 'int':
-            mappings.append(f'{key}: int.parse(map[\'{key}\'].toString()),')
-        elif _infer_type(value) == 'double':
-            mappings.append(f'{key}: double.parse(map[\'{key}\'].toString()),')
-        else:
-            mappings.append(f'{key}: map[\'{key}\'] as {_infer_type(value)},')
-    return '\n      '.join(mappings)
+  """
+  Generate Dart fromMap factory assignments from a sample CSV row.
+  Args:
+    sample_row (Dict): Example row from CSV.
+  Returns:
+    str: Dart assignments for fromMap factory.
+  """
+  mappings = []
+  for key, value in sample_row.items():
+    if _infer_type(value) == 'int':
+      mappings.append(f'{key}: int.parse(map[\'{key}\'].toString()),')
+    elif _infer_type(value) == 'double':
+      mappings.append(f'{key}: double.parse(map[\'{key}\'].toString()),')
+    else:
+      mappings.append(f'{key}: map[\'{key}\'] as {_infer_type(value)},')
+  return '\n      '.join(mappings)
 
 def _infer_type(value: str) -> str:
+  """
+  Infer Dart type from a CSV value.
+  Args:
+    value (str): Value from CSV.
+  Returns:
+    str: Dart type as a string.
+  """
+  try:
+    int(value)
+    return 'int'
+  except ValueError:
     try:
-        int(value)
-        return 'int'
+      float(value)
+      return 'double'
     except ValueError:
-        try:
-            float(value)
-            return 'double'
-        except ValueError:
-            if value.lower() in ['true', 'false']:
-                return 'bool'
-            return 'String'
+      if value.lower() in ['true', 'false']:
+        return 'bool'
+      return 'String'
 
 @cli.command()
 def version():
-    """Check the version of the tool."""
-    click.echo("NmtTool version 0.0.1")
+  """
+  Print the version of the NMT tool.
+  """
+  click.echo("NmtTool version 0.0.1")
 
 @cli.command()
 def flutter_layout(project_name: str):
-    """Generate a responsive Flutter layout template in the project."""
+  """
+  Generate a responsive Flutter layout template in the specified project.
+  Args:
+    project_name (str): Name of the Flutter project.
+  """
     layout_code = """
 import 'package:flutter/material.dart';
 
@@ -176,10 +234,11 @@ class ResponsiveLayout extends StatelessWidget {
 @cli.command()
 @click.argument('new_package_name')
 def change_package_name(new_package_name: str):
-    """
-    Change the package name of a Flutter app.
-    This updates both Android and iOS configurations.
-    """
+  """
+  Change the package name of a Flutter app for both Android and iOS.
+  Args:
+    new_package_name (str): The new package/bundle identifier.
+  """
     if not os.path.exists('pubspec.yaml'):
         click.echo("Error: This command must be run from the root of a Flutter project.")
         return
