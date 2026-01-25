@@ -130,6 +130,32 @@ Feel free to contribute to the project by submitting issues or pull requests on 
 
 ---
 
+
+---
+
+## Troubleshooting
+
+Here are some common issues and solutions:
+
+- **Error: CSV file not found:**
+  - Ensure the path to your CSV file is correct and the file exists.
+
+- **Error: This command must be run from the root of a Flutter project.**
+  - Make sure you are in the root directory of your Flutter project (where `pubspec.yaml` is located) before running commands like `change_package_name`.
+
+- **Permission denied or file not found errors:**
+  - Check your file and directory permissions. Use `chmod` to update permissions if needed.
+
+- **Flutter not found:**
+  - Ensure Flutter is installed and added to your system PATH. Run `flutter doctor` to verify your setup.
+
+- **Command not recognized:**
+  - Make sure you are using the correct Python environment and have installed all dependencies.
+
+If you encounter other issues, please open an issue on GitHub with details and error messages.
+
+---
+
 By following this guide, you can easily set up and use the NMT Tool to streamline your Flutter development workflow! 🎉
 
 
