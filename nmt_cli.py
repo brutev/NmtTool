@@ -20,11 +20,11 @@ def cli():
 @cli.command()
 @click.argument('project_name')
 def create(project_name: str):
-  """
-  Create a new Flutter project with the NMT directory structure.
-  Args:
-    project_name (str): Name of the new Flutter project.
-  """
+    """
+    Create a new Flutter project with the NMT directory structure.
+    Args:
+        project_name (str): Name of the new Flutter project.
+    """
     os.system(f'flutter create {project_name}')
     directories = ['lib/core/entities', 'lib/features', 'lib/shared', 'lib/config']
     for dir_path in directories:
@@ -35,12 +35,12 @@ def create(project_name: str):
 @click.argument('csv_path')
 @click.argument('entity_name')
 def generate_entity(csv_path: str, entity_name: str):
-  """
-  Generate a Dart Equatable entity class from a CSV file.
-  Args:
-    csv_path (str): Path to the CSV file.
-    entity_name (str): Name of the Dart entity to generate.
-  """
+    """
+    Generate a Dart Equatable entity class from a CSV file.
+    Args:
+        csv_path (str): Path to the CSV file.
+        entity_name (str): Name of the Dart entity to generate.
+    """
     if not os.path.exists(csv_path):
         click.echo(f'Error: CSV file not found: {csv_path}')
         return
@@ -163,11 +163,11 @@ def version():
 
 @cli.command()
 def flutter_layout(project_name: str):
-  """
-  Generate a responsive Flutter layout template in the specified project.
-  Args:
-    project_name (str): Name of the Flutter project.
-  """
+    """
+    Generate a responsive Flutter layout template in the specified project.
+    Args:
+        project_name (str): Name of the Flutter project.
+    """
     layout_code = """
 import 'package:flutter/material.dart';
 
@@ -239,73 +239,63 @@ def change_package_name(new_package_name: str):
   Args:
     new_package_name (str): The new package/bundle identifier.
   """
-    if not os.path.exists('pubspec.yaml'):
-        click.echo("Error: This command must be run from the root of a Flutter project.")
-        return
+  if not os.path.exists('pubspec.yaml'):
+    click.echo("Error: This command must be run from the root of a Flutter project.")
+    return
 
-    # Update Android package name
-    android_path = 'android/app'
-    build_gradle_path = os.path.join(android_path, 'build.gradle')
-    old_package_name = None
+  # Update Android package name
+  android_path = 'android/app'
+  build_gradle_path = os.path.join(android_path, 'build.gradle')
+  old_package_name = None
 
-    if os.path.exists(build_gradle_path):
-        with open(build_gradle_path, 'r') as f:
-            content = f.read()
-        
-        # Extract the current applicationId
-        old_package_name = next(
-            (line.split('"')[1] for line in content.splitlines() if 'applicationId' in line), None
-        )
-
-        if old_package_name:
-            content = content.replace(f'applicationId "{old_package_name}"', f'applicationId "{new_package_name}"')
-
-            with open(build_gradle_path, 'w') as f:
-                f.write(content)
-
-            click.echo(f"Updated Android applicationId from '{old_package_name}' to '{new_package_name}'.")
-        else:
-            click.echo("Warning: Could not find 'applicationId' in build.gradle.")
-
-    # Rename Android directories
+  if os.path.exists(build_gradle_path):
+    with open(build_gradle_path, 'r') as f:
+      content = f.read()
+    # Extract the current applicationId
+    old_package_name = next(
+      (line.split('"')[1] for line in content.splitlines() if 'applicationId' in line), None
+    )
     if old_package_name:
-        old_dirs = old_package_name.split('.')
-        new_dirs = new_package_name.split('.')
-        base_dir = os.path.join(android_path, 'src', 'main', 'java')
+      content = content.replace(f'applicationId "{old_package_name}"', f'applicationId "{new_package_name}"')
+      with open(build_gradle_path, 'w') as f:
+        f.write(content)
+      click.echo(f"Updated Android applicationId from '{old_package_name}' to '{new_package_name}'.")
+    else:
+      click.echo("Warning: Could not find 'applicationId' in build.gradle.")
 
-        old_path = os.path.join(base_dir, *old_dirs)
-        new_path = os.path.join(base_dir, *new_dirs)
+  # Rename Android directories
+  if old_package_name:
+    old_dirs = old_package_name.split('.')
+    new_dirs = new_package_name.split('.')
+    base_dir = os.path.join(android_path, 'src', 'main', 'java')
+    old_path = os.path.join(base_dir, *old_dirs)
+    new_path = os.path.join(base_dir, *new_dirs)
+    if os.path.exists(old_path):
+      os.makedirs(new_path, exist_ok=True)
+      for root, dirs, files in os.walk(old_path):
+        for file in files:
+          src = os.path.join(root, file)
+          dst = os.path.join(new_path, os.path.relpath(src, old_path))
+          os.makedirs(os.path.dirname(dst), exist_ok=True)
+          os.rename(src, dst)
+      # Clean up old directories
+      for root, dirs, files in os.walk(old_path, topdown=False):
+        for dir_ in dirs:
+          os.rmdir(os.path.join(root, dir_))
+        os.rmdir(root)
+      click.echo(f"Renamed Android package directories to match '{new_package_name}'.")
 
-        if os.path.exists(old_path):
-            os.makedirs(new_path, exist_ok=True)
-            for root, dirs, files in os.walk(old_path):
-                for file in files:
-                    src = os.path.join(root, file)
-                    dst = os.path.join(new_path, os.path.relpath(src, old_path))
-                    os.makedirs(os.path.dirname(dst), exist_ok=True)
-                    os.rename(src, dst)
-            # Clean up old directories
-            for root, dirs, files in os.walk(old_path, topdown=False):
-                for dir_ in dirs:
-                    os.rmdir(os.path.join(root, dir_))
-                os.rmdir(root)
+  # Update iOS bundle identifier
+  ios_path = 'ios/Runner.xcodeproj/project.pbxproj'
+  if os.path.exists(ios_path):
+    with open(ios_path, 'r') as f:
+      content = f.read()
+    content = content.replace(f'PRODUCT_BUNDLE_IDENTIFIER = {old_package_name};', f'PRODUCT_BUNDLE_IDENTIFIER = {new_package_name};')
+    with open(ios_path, 'w') as f:
+      f.write(content)
+    click.echo(f"Updated iOS bundle identifier to '{new_package_name}'.")
 
-            click.echo(f"Renamed Android package directories to match '{new_package_name}'.")
-
-    # Update iOS bundle identifier
-    ios_path = 'ios/Runner.xcodeproj/project.pbxproj'
-    if os.path.exists(ios_path):
-        with open(ios_path, 'r') as f:
-            content = f.read()
-
-        content = content.replace(f'PRODUCT_BUNDLE_IDENTIFIER = {old_package_name};', f'PRODUCT_BUNDLE_IDENTIFIER = {new_package_name};')
-
-        with open(ios_path, 'w') as f:
-            f.write(content)
-
-        click.echo(f"Updated iOS bundle identifier to '{new_package_name}'.")
-
-    click.echo("Package name change completed. You may need to run 'flutter clean' before rebuilding the project.")
+  click.echo("Package name change completed. You may need to run 'flutter clean' before rebuilding the project.")
 
 if __name__ == '__main__':
     cli()
