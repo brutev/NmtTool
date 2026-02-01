@@ -6,16 +6,72 @@ Provides commands for project creation, entity generation, layout templates, and
 
 import click
 import os
-import json
 import csv
+import logging
+import re
+import shutil
+import subprocess
 from typing import Dict, List
 
 @click.group()
-def cli():
+@click.option('--verbose', is_flag=True, help='Enable verbose logging output.')
+def cli(verbose: bool):
   """
   Main entry point for the NMT CLI tool.
   """
-  pass
+  log_level = logging.DEBUG if verbose else logging.INFO
+  logging.basicConfig(level=log_level, format='[%(levelname)s] %(message)s')
+
+
+def _ensure_flutter_installed() -> None:
+  """
+  Ensure Flutter is available on PATH.
+  """
+  if shutil.which('flutter') is None:
+    raise click.ClickException('Flutter is not installed or not on PATH. Run "flutter doctor" to verify.')
+
+
+def _validate_project_name(project_name: str) -> None:
+  """
+  Validate Flutter/Dart package name conventions for project names.
+  """
+  pattern = r'^[a-z][a-z0-9_]*$'
+  if not re.match(pattern, project_name):
+    suggested = re.sub(r'[^a-z0-9_]', '_', project_name.lower()).strip('_') or 'my_app'
+    raise click.ClickException(
+      f'Invalid Dart package name "{project_name}". Try "{suggested}" instead.'
+    )
+
+
+def _validate_package_name(package_name: str) -> None:
+  """
+  Validate Android/iOS package name (reverse-DNS style).
+  """
+  pattern = r'^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$'
+  if not re.match(pattern, package_name):
+    suggested = package_name.lower().replace('-', '_')
+    raise click.ClickException(
+      f'Invalid package name "{package_name}". Use reverse-DNS like "com.example.app". '
+      f'Suggested: "{suggested}".'
+    )
+
+
+def _read_csv_sample_row(csv_path: str) -> Dict:
+  """
+  Read a sample row from the CSV file and validate headers.
+  """
+  if not os.path.exists(csv_path):
+    raise click.ClickException(f'CSV file not found: {csv_path}')
+
+  with open(csv_path, 'r', newline='', encoding='utf-8') as file:
+    reader = csv.DictReader(file)
+    if reader.fieldnames is None:
+      raise click.ClickException('CSV file has no headers. Please include a header row.')
+    try:
+      sample_row = next(reader)
+    except StopIteration:
+      raise click.ClickException('CSV file has headers but no data rows.')
+  return sample_row
 
 @cli.command()
 @click.argument('project_name')
@@ -25,7 +81,12 @@ def create(project_name: str):
     Args:
         project_name (str): Name of the new Flutter project.
     """
-    os.system(f'flutter create {project_name}')
+    _ensure_flutter_installed()
+    _validate_project_name(project_name)
+    try:
+      subprocess.run(['flutter', 'create', project_name], check=True)
+    except subprocess.CalledProcessError as exc:
+      raise click.ClickException(f'Flutter project creation failed with exit code {exc.returncode}.')
     directories = ['lib/core/entities', 'lib/features', 'lib/shared', 'lib/config']
     for dir_path in directories:
         os.makedirs(f'{project_name}/{dir_path}', exist_ok=True)
@@ -41,13 +102,7 @@ def generate_entity(csv_path: str, entity_name: str):
         csv_path (str): Path to the CSV file.
         entity_name (str): Name of the Dart entity to generate.
     """
-    if not os.path.exists(csv_path):
-        click.echo(f'Error: CSV file not found: {csv_path}')
-        return
-
-    with open(csv_path, 'r') as file:
-        reader = csv.DictReader(file)
-        sample_row = next(reader)
+    sample_row = _read_csv_sample_row(csv_path)
         
     entity_template = f'''
 import 'package:equatable/equatable.dart';
@@ -168,6 +223,9 @@ def flutter_layout(project_name: str):
     Args:
         project_name (str): Name of the Flutter project.
     """
+    if not os.path.isdir(project_name):
+      raise click.ClickException(f'Project directory not found: {project_name}')
+
     layout_code = """
 import 'package:flutter/material.dart';
 
@@ -239,6 +297,7 @@ def change_package_name(new_package_name: str):
   Args:
     new_package_name (str): The new package/bundle identifier.
   """
+  _validate_package_name(new_package_name)
   if not os.path.exists('pubspec.yaml'):
     click.echo("Error: This command must be run from the root of a Flutter project.")
     return
@@ -287,7 +346,7 @@ def change_package_name(new_package_name: str):
 
   # Update iOS bundle identifier
   ios_path = 'ios/Runner.xcodeproj/project.pbxproj'
-  if os.path.exists(ios_path):
+  if os.path.exists(ios_path) and old_package_name:
     with open(ios_path, 'r') as f:
       content = f.read()
     content = content.replace(f'PRODUCT_BUNDLE_IDENTIFIER = {old_package_name};', f'PRODUCT_BUNDLE_IDENTIFIER = {new_package_name};')
