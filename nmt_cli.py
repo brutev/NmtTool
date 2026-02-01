@@ -6,26 +6,87 @@ Provides commands for project creation, entity generation, layout templates, and
 
 import click
 import os
-import json
 import csv
+import logging
+import re
+import shutil
+import subprocess
 from typing import Dict, List
 
 @click.group()
-def cli():
+@click.option('--verbose', is_flag=True, help='Enable verbose logging output.')
+def cli(verbose: bool):
   """
   Main entry point for the NMT CLI tool.
   """
-  pass
+  log_level = logging.DEBUG if verbose else logging.INFO
+  logging.basicConfig(level=log_level, format='[%(levelname)s] %(message)s')
+
+
+def _ensure_flutter_installed() -> None:
+  """
+  Ensure Flutter is available on PATH.
+  """
+  if shutil.which('flutter') is None:
+    raise click.ClickException('Flutter is not installed or not on PATH. Run "flutter doctor" to verify.')
+
+
+def _validate_project_name(project_name: str) -> None:
+  """
+  Validate Flutter/Dart package name conventions for project names.
+  """
+  pattern = r'^[a-z][a-z0-9_]*$'
+  if not re.match(pattern, project_name):
+    suggested = re.sub(r'[^a-z0-9_]', '_', project_name.lower()).strip('_') or 'my_app'
+    raise click.ClickException(
+      f'Invalid Dart package name "{project_name}". Try "{suggested}" instead.'
+    )
+
+
+def _validate_package_name(package_name: str) -> None:
+  """
+  Validate Android/iOS package name (reverse-DNS style).
+  """
+  pattern = r'^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$'
+  if not re.match(pattern, package_name):
+    suggested = package_name.lower().replace('-', '_')
+    raise click.ClickException(
+      f'Invalid package name "{package_name}". Use reverse-DNS like "com.example.app". '
+      f'Suggested: "{suggested}".'
+    )
+
+
+def _read_csv_sample_row(csv_path: str) -> Dict:
+  """
+  Read a sample row from the CSV file and validate headers.
+  """
+  if not os.path.exists(csv_path):
+    raise click.ClickException(f'CSV file not found: {csv_path}')
+
+  with open(csv_path, 'r', newline='', encoding='utf-8') as file:
+    reader = csv.DictReader(file)
+    if reader.fieldnames is None:
+      raise click.ClickException('CSV file has no headers. Please include a header row.')
+    try:
+      sample_row = next(reader)
+    except StopIteration:
+      raise click.ClickException('CSV file has headers but no data rows.')
+  return sample_row
 
 @cli.command()
 @click.argument('project_name')
 def create(project_name: str):
-  """
-  Create a new Flutter project with the NMT directory structure.
-  Args:
-    project_name (str): Name of the new Flutter project.
-  """
-    os.system(f'flutter create {project_name}')
+    """
+    Create a new Flutter project with the NMT directory structure.
+    Args:
+        project_name (str): Name of the new Flutter project.
+    """
+    _ensure_flutter_installed()
+    _validate_project_name(project_name)
+    try:
+      subprocess.run(['flutter', 'create', project_name], check=True)
+    except subprocess.CalledProcessError as exc:
+      raise click.ClickException(f'Flutter project creation failed with exit code {exc.returncode}.')
     directories = ['lib/core/entities', 'lib/features', 'lib/shared', 'lib/config']
     for dir_path in directories:
         os.makedirs(f'{project_name}/{dir_path}', exist_ok=True)
@@ -35,19 +96,13 @@ def create(project_name: str):
 @click.argument('csv_path')
 @click.argument('entity_name')
 def generate_entity(csv_path: str, entity_name: str):
-  """
-  Generate a Dart Equatable entity class from a CSV file.
-  Args:
-    csv_path (str): Path to the CSV file.
-    entity_name (str): Name of the Dart entity to generate.
-  """
-    if not os.path.exists(csv_path):
-        click.echo(f'Error: CSV file not found: {csv_path}')
-        return
-
-    with open(csv_path, 'r') as file:
-        reader = csv.DictReader(file)
-        sample_row = next(reader)
+    """
+    Generate a Dart Equatable entity class from a CSV file.
+    Args:
+        csv_path (str): Path to the CSV file.
+        entity_name (str): Name of the Dart entity to generate.
+    """
+    sample_row = _read_csv_sample_row(csv_path)
         
     entity_template = f'''
 import 'package:equatable/equatable.dart';
@@ -163,11 +218,14 @@ def version():
 
 @cli.command()
 def flutter_layout(project_name: str):
-  """
-  Generate a responsive Flutter layout template in the specified project.
-  Args:
-    project_name (str): Name of the Flutter project.
-  """
+    """
+    Generate a responsive Flutter layout template in the specified project.
+    Args:
+        project_name (str): Name of the Flutter project.
+    """
+    if not os.path.isdir(project_name):
+      raise click.ClickException(f'Project directory not found: {project_name}')
+
     layout_code = """
 import 'package:flutter/material.dart';
 
@@ -239,73 +297,64 @@ def change_package_name(new_package_name: str):
   Args:
     new_package_name (str): The new package/bundle identifier.
   """
-    if not os.path.exists('pubspec.yaml'):
-        click.echo("Error: This command must be run from the root of a Flutter project.")
-        return
+  _validate_package_name(new_package_name)
+  if not os.path.exists('pubspec.yaml'):
+    click.echo("Error: This command must be run from the root of a Flutter project.")
+    return
 
-    # Update Android package name
-    android_path = 'android/app'
-    build_gradle_path = os.path.join(android_path, 'build.gradle')
-    old_package_name = None
+  # Update Android package name
+  android_path = 'android/app'
+  build_gradle_path = os.path.join(android_path, 'build.gradle')
+  old_package_name = None
 
-    if os.path.exists(build_gradle_path):
-        with open(build_gradle_path, 'r') as f:
-            content = f.read()
-        
-        # Extract the current applicationId
-        old_package_name = next(
-            (line.split('"')[1] for line in content.splitlines() if 'applicationId' in line), None
-        )
-
-        if old_package_name:
-            content = content.replace(f'applicationId "{old_package_name}"', f'applicationId "{new_package_name}"')
-
-            with open(build_gradle_path, 'w') as f:
-                f.write(content)
-
-            click.echo(f"Updated Android applicationId from '{old_package_name}' to '{new_package_name}'.")
-        else:
-            click.echo("Warning: Could not find 'applicationId' in build.gradle.")
-
-    # Rename Android directories
+  if os.path.exists(build_gradle_path):
+    with open(build_gradle_path, 'r') as f:
+      content = f.read()
+    # Extract the current applicationId
+    old_package_name = next(
+      (line.split('"')[1] for line in content.splitlines() if 'applicationId' in line), None
+    )
     if old_package_name:
-        old_dirs = old_package_name.split('.')
-        new_dirs = new_package_name.split('.')
-        base_dir = os.path.join(android_path, 'src', 'main', 'java')
+      content = content.replace(f'applicationId "{old_package_name}"', f'applicationId "{new_package_name}"')
+      with open(build_gradle_path, 'w') as f:
+        f.write(content)
+      click.echo(f"Updated Android applicationId from '{old_package_name}' to '{new_package_name}'.")
+    else:
+      click.echo("Warning: Could not find 'applicationId' in build.gradle.")
 
-        old_path = os.path.join(base_dir, *old_dirs)
-        new_path = os.path.join(base_dir, *new_dirs)
+  # Rename Android directories
+  if old_package_name:
+    old_dirs = old_package_name.split('.')
+    new_dirs = new_package_name.split('.')
+    base_dir = os.path.join(android_path, 'src', 'main', 'java')
+    old_path = os.path.join(base_dir, *old_dirs)
+    new_path = os.path.join(base_dir, *new_dirs)
+    if os.path.exists(old_path):
+      os.makedirs(new_path, exist_ok=True)
+      for root, dirs, files in os.walk(old_path):
+        for file in files:
+          src = os.path.join(root, file)
+          dst = os.path.join(new_path, os.path.relpath(src, old_path))
+          os.makedirs(os.path.dirname(dst), exist_ok=True)
+          os.rename(src, dst)
+      # Clean up old directories
+      for root, dirs, files in os.walk(old_path, topdown=False):
+        for dir_ in dirs:
+          os.rmdir(os.path.join(root, dir_))
+        os.rmdir(root)
+      click.echo(f"Renamed Android package directories to match '{new_package_name}'.")
 
-        if os.path.exists(old_path):
-            os.makedirs(new_path, exist_ok=True)
-            for root, dirs, files in os.walk(old_path):
-                for file in files:
-                    src = os.path.join(root, file)
-                    dst = os.path.join(new_path, os.path.relpath(src, old_path))
-                    os.makedirs(os.path.dirname(dst), exist_ok=True)
-                    os.rename(src, dst)
-            # Clean up old directories
-            for root, dirs, files in os.walk(old_path, topdown=False):
-                for dir_ in dirs:
-                    os.rmdir(os.path.join(root, dir_))
-                os.rmdir(root)
+  # Update iOS bundle identifier
+  ios_path = 'ios/Runner.xcodeproj/project.pbxproj'
+  if os.path.exists(ios_path) and old_package_name:
+    with open(ios_path, 'r') as f:
+      content = f.read()
+    content = content.replace(f'PRODUCT_BUNDLE_IDENTIFIER = {old_package_name};', f'PRODUCT_BUNDLE_IDENTIFIER = {new_package_name};')
+    with open(ios_path, 'w') as f:
+      f.write(content)
+    click.echo(f"Updated iOS bundle identifier to '{new_package_name}'.")
 
-            click.echo(f"Renamed Android package directories to match '{new_package_name}'.")
-
-    # Update iOS bundle identifier
-    ios_path = 'ios/Runner.xcodeproj/project.pbxproj'
-    if os.path.exists(ios_path):
-        with open(ios_path, 'r') as f:
-            content = f.read()
-
-        content = content.replace(f'PRODUCT_BUNDLE_IDENTIFIER = {old_package_name};', f'PRODUCT_BUNDLE_IDENTIFIER = {new_package_name};')
-
-        with open(ios_path, 'w') as f:
-            f.write(content)
-
-        click.echo(f"Updated iOS bundle identifier to '{new_package_name}'.")
-
-    click.echo("Package name change completed. You may need to run 'flutter clean' before rebuilding the project.")
+  click.echo("Package name change completed. You may need to run 'flutter clean' before rebuilding the project.")
 
 if __name__ == '__main__':
     cli()

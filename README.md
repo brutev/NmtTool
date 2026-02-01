@@ -125,6 +125,34 @@ A file `nmt.json` will be created with basic project configuration.
 
 ---
 
+## **Testing and Coverage**
+
+### **Python CLI Tests**
+Run unit tests:
+```bash
+python3 -m unittest discover -s tests
+```
+
+Generate coverage:
+```bash
+python3 -m coverage run -m unittest discover -s tests
+python3 -m coverage report
+python3 -m coverage html
+```
+
+### **Flutter Tests**
+Run Flutter tests:
+```bash
+flutter test
+```
+
+Generate Flutter coverage (creates `coverage/lcov.info`):
+```bash
+flutter test --coverage
+```
+
+---
+
 ## **Development**
 Feel free to contribute to the project by submitting issues or pull requests on GitHub.
 
